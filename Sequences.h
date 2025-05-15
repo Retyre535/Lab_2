@@ -28,11 +28,38 @@ public:
 };
 
 template <class T>
-class DynamicArray : public ICollection<T> {
+class Optional {
+private:
+    T value;
+    bool hasValue;
+public:
+    Optional() : hasValue(false) {}
+    Optional(T val) : value(val), hasValue(true) {}
+    static Optional<T> None() {
+        return Optional<T>();
+    }
+
+    bool IsSome() {
+        return hasValue;
+    }
+
+    bool IsNone() {
+        return !hasValue;
+    }
+
+    T GetValue() {
+        if (!hasValue) {
+            throw runtime_error("Option is None");
+        }
+        return value;
+    }
+};
+
+template <class T>
+class DynamicArray{
 private:
     T* data;
     int size;
-
 public:
 
     DynamicArray() {
@@ -56,7 +83,7 @@ public:
         }
     }
 
-    DynamicArray(DynamicArray<T>& dynamicArray) : size(dynamicArray.size()) {
+    DynamicArray(DynamicArray<T>& dynamicArray) : size(dynamicArray.GetSize()) {
         data = new T[size];
         for (int i = 0; i < size; i++) {
             data[i] = dynamicArray[i];
@@ -67,11 +94,11 @@ public:
         delete[] data;
     }
 
-    int GetSize() const override {
+    int GetSize() const {
         return size;
     }
 
-    T Get(int index) const override {
+    T Get(int index) const  {
         if (index < 0 || index >= size) {
             throw IndexOutOfRange();
         }
@@ -113,20 +140,20 @@ public:
         return data[index];
     }
 
-    void Append(T item) override {
+    void Append(T item)  {
         Resize(GetSize() + 1);
         data[GetSize() - 1] = item;
     }
 
-    void Prepend(T item) override {
+    void Prepend(T item) {
         Resize(GetSize() + 1);
-        for (int i = GetSize() - 1; i >= 0; i--) {
-            Set(i, item);
+        for (int i = GetSize() - 1; i > 0; --i) {
+            data[i] = data[i - 1];
         }
-        Set(0, item);
+        data[0] = item;
     }
 
-    void Insert(T item, int index) override {
+    void Insert(T item, int index) {
         if (index < 0 || index > size) {
             throw IndexOutOfRange();
         }
@@ -139,16 +166,16 @@ public:
         }
         else {
             Resize(GetSize() + 1);
-            for (int i = GetSize() - 1; i >= index; i--) {
-                Set(i, item);
+            for (int i = GetSize() - 1; i > index; i--) {
+                data[i] = data[i - 1];
             }
-            Set(index, item);
+            data[index] = item;
         }
     }
 };
 
 template <class T>
-class LinkedList : public ICollection<T> {
+class LinkedList{
 private:
     struct Node {
         T data;
@@ -207,7 +234,7 @@ public:
         return tail->data;
     }
 
-    T Get(int index) const override {
+    T Get(int index) const  {
         return GetNode(index)->data;
     }
 
@@ -219,7 +246,7 @@ public:
         return GetNode(index)->data;
     }
 
-    int GetSize() const override {
+    int GetSize() const  {
         return size;
     }
 
@@ -234,7 +261,7 @@ public:
         return subList;
     }
 
-    void Append(T item) override {
+    void Append(T item)  {
         Node* newNode = new Node(item);
         if (head == nullptr) {
             head = tail = newNode;
@@ -246,7 +273,7 @@ public:
         size++;
     }
 
-    void Prepend(T item) override {
+    void Prepend(T item)  {
         head = new Node(item, head);
         if (tail == nullptr) {
             tail = head;
@@ -254,7 +281,7 @@ public:
         size++;
     }
 
-    void Insert(T item, int index) override {
+    void Insert(T item, int index)  {
         if (index < 0 || index > size) {
             throw IndexOutOfRange();
         }
@@ -300,11 +327,8 @@ public:
     virtual void Insert(T item, int index) = 0;
     virtual Sequence<T>* Concat(Sequence<T>* list) = 0;
     virtual Sequence<T>* Map(function<T(T)> func) = 0;
-    virtual T Reduce(function<T(T, T)> func, T startValue) = 0;
-    virtual Sequence<T>* Where(function<bool(T)> predicate) = 0;
-    virtual Sequence<T>* Zip(Sequence<T>* other, function<T(T, T)> func) = 0;
-    virtual Sequence<T>* Slice(int index, int count, Sequence<T>* replacement) = 0;
-    virtual Sequence<T>* Split(function<bool(T)> predicate) = 0;
+    virtual Sequence<T>* From(const Sequence<T>& other) = 0;
+    virtual Sequence<T>* Zip(const Sequence<T>& other) const = 0;
     virtual bool TryGet(int index, T& value) = 0;
     virtual bool TryFind(function<bool(T)> predicate, T& value) = 0;
     virtual T& operator[](int index) = 0;
@@ -316,18 +340,23 @@ class ArraySequence : public Sequence<T> {
 protected:
     DynamicArray<T>* array;
 public:
-    ArraySequence(T* items, int count) {
-        array = new DynamicArray<T>(items, count);
-    }
 
     ArraySequence() {
         array = new DynamicArray<T>(0);
     }
 
-    ArraySequence(ArraySequence<T>& cArray) {
-        array = new DynamicArray<T>(cArray.GetSize());
-        for (int i = 0; i < cArray.GetSize(); ++i) {
-            array->Set(i, cArray.Get(i));
+    ArraySequence(T* items, int count){
+        array = new DynamicArray<T>(items, count);
+    }
+
+    ArraySequence(const ArraySequence<T>& other) {
+        array = new DynamicArray<T>(*other.array);
+    }
+
+    ArraySequence(const Sequence<T>& other) {
+        array = new DynamicArray<T>(0);
+        for (int i = 0; i < other.GetSize(); ++i) {
+            array->Append(other.Get(i));
         }
     }
 
@@ -384,7 +413,7 @@ public:
         return newSequence;
     }
 
-    Sequence<T>* Map(std::function<T(T)> func) override {
+    Sequence<T>* Map(function<T(T)> func) override {
         ArraySequence<T>* newSequence = new ArraySequence<T>();
         for (int i = 0; i < array->GetSize(); ++i) {
             newSequence->Append(func(array->Get(i)));
@@ -392,81 +421,35 @@ public:
         return newSequence;
     }
 
-    T Reduce(std::function<T(T, T)> func, T startValue) override {
-        T result = startValue;
-        for (int i = 0; i < array->GetSize(); ++i) {
-            result = func(result, array->Get(i));
+    Sequence<T>* From(const Sequence<T>& other) override{
+        Sequence<T>* result = new ArraySequence<T>();
+        for (int i = 0; i < other.GetSize(); ++i) {
+            result->Append(other.Get(i));
+        }
+        return result;
+    }
+    
+    // Tuple<T,T> == Pair<T>
+    // zip: Tuple<Sequence<T>, Sequence<T>> -> Sequence<Tuple<T,T>>
+    // unzip: Sequence<Tuple<T,T>> -> Tuple<Sequence<T>, Sequence<T>>
+
+    Sequence<T>* Zip(const Sequence<T>& other) const override {
+        ArraySequence<T>* result = new ArraySequence<T>();
+        int minSize = min(this->GetSize(), other.GetSize());
+        for (int i = 0; i < minSize; ++i) {
+            result->Append(this->Get(i));
+            result->Append(other.Get(i));
         }
         return result;
     }
 
-    Sequence<T>* Where(std::function<bool(T)> predicate) override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>();
-        for (int i = 0; i < array->GetSize(); ++i) {
-            if (predicate(array->Get(i))) {
-                newSequence->Append(array->Get(i));
-            }
-        }
-        return newSequence;
-    }
-
-    Sequence<T>* Zip(Sequence<T>* other, std::function<T(T, T)> func) override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>();
-        int minLength = std::min(array->GetSize(), other->GetSize());
-        for (int i = 0; i < minLength; ++i) {
-            newSequence->Append(func(array->Get(i), other->Get(i)));
-        }
-        return newSequence;
-    }
-
-    Sequence<T>* Slice(int index, int count, Sequence<T>* replacement) override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>();
-        if (index < 0) {
-            index = array->GetSize() + index;
-            if (index < 0) {
-                throw IndexOutOfRange();
-            }
-        }
-        if (index >= array->GetSize() || index + count > array->GetSize()) {
-            throw IndexOutOfRange();
-        }
-        for (int i = 0; i < index; ++i) {
-            newSequence->Append(array->Get(i));
-        }
-        if (replacement != nullptr) {
-            for (int i = 0; i < replacement->GetSize(); ++i) {
-                newSequence->Append(replacement->Get(i));
-            }
-        }
-        for (int i = index + count; i < array->GetSize(); ++i) {
-            newSequence->Append(array->Get(i));
-        }
-        return newSequence;
-    }
-
-    Sequence<T>* Split(std::function<bool(T)> predicate) override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>();
-        ArraySequence<T>* currentChunk = new ArraySequence<T>();
-        for (int i = 0; i < array->GetSize(); ++i) {
-            T item = array->Get(i);
-            if (predicate(item)) {
-                if (currentChunk->GetSize() > 0) {
-                    newSequence->Append(currentChunk->Get(0)); // Simplified for example
-                    delete currentChunk;
-                    currentChunk = new ArraySequence<T>();
-                }
-            }
-            else {
-                currentChunk->Append(item);
-            }
-        }
-        if (currentChunk->GetSize() > 0) {
-            newSequence->Append(currentChunk->Get(0)); // Simplified for example
-        }
-        delete currentChunk;
-        return newSequence;
-    }
-
+    //Optional<T> TryGet(int index) override {
+    //    if (index < 0 || index >= array->GetSize()) {
+    //        return Optional::None();
+    //    }
+    //    auto value = array->Get(index);
+    //    return Optional<T>(value);
+    //}
     bool TryGet(int index, T& value) override {
         if (index < 0 || index >= array->GetSize()) {
             return false;
@@ -507,9 +490,17 @@ public:
 };
 
 template <class T>
-class MutableArraySequence {
+class MutableArraySequence : public ArraySequence<T> {
 public:
     using ArraySequence<T>::ArraySequence;
+
+    MutableArraySequence() : ArraySequence<T>() {}
+
+    MutableArraySequence(T* items, int count) : ArraySequence<T>(items, count) {}
+
+    MutableArraySequence(const MutableArraySequence<T>& other) : ArraySequence<T>(other) {}
+
+    MutableArraySequence(const Sequence<T>& other) : ArraySequence<T>(other) {}
 
     Sequence<T>* Instance() {
         return this;
@@ -525,6 +516,8 @@ class ImmutableArraySequence : public ArraySequence<T> {
 public:
     using ArraySequence<T>::ArraySequence;
 
+    ImmutableArraySequence(const ImmutableArraySequence<T>& other) : ArraySequence<T>(other) {}
+
     Sequence<T>* Instance() override {
         return this->Clone();
     }
@@ -539,16 +532,13 @@ class ListSequence : public Sequence<T> {
 protected:
     LinkedList<T>* list;
 public:
-    ListSequence(T* items, int count) {
-        list = new LinkedList<T>(items, count);
-    }
+    ListSequence(T* items, int count) : list(new LinkedList<T>(items, count)) {}
 
     ListSequence() {
         list = new LinkedList<T>();
     }
 
-    ListSequence(const ListSequence<T>& other) {
-        list = new LinkedList<T>();
+    ListSequence(const Sequence<T>& other) : list(new LinkedList<T>()) {
         for (int i = 0; i < other.GetSize(); ++i) {
             list->Append(other.Get(i));
         }
@@ -605,7 +595,7 @@ public:
         return newSequence;
     }
 
-    Sequence<T>* Map(std::function<T(T)> func) override {
+    Sequence<T>* Map(function<T(T)> func) override {
         ListSequence<T>* newSequence = new ListSequence<T>();
         for (int i = 0; i < GetSize(); ++i) {
             newSequence->Append(func(Get(i)));
@@ -613,92 +603,24 @@ public:
         return newSequence;
     }
 
-    T Reduce(std::function<T(T, T)> func, T startValue) override {
-        T result = startValue;
-        for (int i = 0; i < GetSize(); ++i) {
-            result = func(result, Get(i));
+    Sequence<T>* From(const Sequence<T>& other) override {
+        Sequence<T>* result = new ListSequence<T>();
+        for (int i = 0; i < other.GetSize(); ++i) {
+            result->Append(other.Get(i));
         }
         return result;
     }
 
-    Sequence<T>* Where(std::function<bool(T)> predicate) override {
-        ListSequence<T>* newSequence = new ListSequence<T>();
-        for (int i = 0; i < GetSize(); ++i) {
-            T item = Get(i);
-            if (predicate(item)) {
-                newSequence->Append(item);
-            }
-        }
-        return newSequence;
-    }
-
-    Sequence<T>* Zip(Sequence<T>* other, std::function<T(T, T)> func) override {
-        ListSequence<T>* newSequence = new ListSequence<T>();
-        int minLength = std::min(GetSize(), other->GetSize());
-        for (int i = 0; i < minLength; ++i) {
-            newSequence->Append(func(Get(i), other->Get(i)));
-        }
-        return newSequence;
-    }
-
-    Sequence<T>* Slice(int index, int count, Sequence<T>* replacement) override {
-        ListSequence<T>* newSequence = new ListSequence<T>();
-
-        if (index < 0) {
-            index = GetSize() + index;
-            if (index < 0) throw IndexOutOfRange();
-        }
-
-        if (index >= GetSize() || index + count > GetSize()) {
-            throw IndexOutOfRange();
-        }
-
-        // Add elements before the slice
-        for (int i = 0; i < index; ++i) {
-            newSequence->Append(Get(i));
-        }
-
-        // Add replacement if provided
-        if (replacement != nullptr) {
-            for (int i = 0; i < replacement->GetSize(); ++i) {
-                newSequence->Append(replacement->Get(i));
-            }
-        }
-
-        // Add elements after the slice
-        for (int i = index + count; i < GetSize(); ++i) {
-            newSequence->Append(Get(i));
-        }
-
-        return newSequence;
-    }
-
-    Sequence<T>* Split(std::function<bool(T)> predicate) override {
+    Sequence<T>* Zip(const Sequence<T>& other) const override {
         ListSequence<T>* result = new ListSequence<T>();
-        ListSequence<T>* current = new ListSequence<T>();
-
-        for (int i = 0; i < GetSize(); ++i) {
-            T item = Get(i);
-            if (predicate(item)) {
-                if (current->GetSize() > 0) {
-                    result->Append(current->Get(0)); // Simplified
-                    delete current;
-                    current = new ListSequence<T>();
-                }
-            }
-            else {
-                current->Append(item);
-            }
+        int minSize = min(this->GetSize(), other.GetSize());
+        for (int i = 0; i < minSize; ++i) {
+            result->Append(this->Get(i));
+            result->Append(other.Get(i));
         }
-
-        if (current->GetSize() > 0) {
-            result->Append(current->Get(0)); // Simplified
-        }
-        delete current;
-
         return result;
     }
-
+    
     bool TryGet(int index, T& value) override {
         if (index < 0 || index >= GetSize()) {
             return false;
@@ -736,7 +658,15 @@ public:
 
 template <class T>
 class MutableListSequence : public ListSequence<T> {
+public:
     using ListSequence<T>::ListSequence;
+    MutableListSequence() : ListSequence<T>() {}
+
+    MutableListSequence(T* items, int count) : ListSequence<T>(items, count) {}
+
+    MutableListSequence(const MutableListSequence<T>& other) : ListSequence<T>(other) {}
+
+    MutableListSequence(const Sequence<T>& other) : ListSequence<T>(other) {}
 
     Sequence<T>* Instance() override {
         return this;
@@ -749,7 +679,10 @@ class MutableListSequence : public ListSequence<T> {
 
 template <class T>
 class ImmutableListSequence : public ListSequence<T> {
+public:
     using ListSequence<T>::ListSequence;
+
+    ImmutableListSequence(const ImmutableListSequence<T>& other) : ListSequence<T>(other) {}
 
     Sequence<T>* Instance() override {
         return this->Clone();
@@ -843,35 +776,33 @@ public:
         return sequence->Concat(other);
     }
 
-    Sequence<T>* Map(std::function<T(T)> func) override {
+    Sequence<T>* Map(function<T(T)> func) override {
         return sequence->Map(func);
     }
 
-    T Reduce(std::function<T(T, T)> func, T startValue) override {
-        return sequence->Reduce(func, startValue);
+    Sequence<T>* From(const Sequence<T>& other) override{
+        AdaptiveSequence<T>* result = new AdaptiveSequence<T>();
+        for (int i = 0; i < other.GetSize(); ++i) {
+            result->Append(other.Get(i));
+        }
+        return result;
     }
 
-    Sequence<T>* Where(std::function<bool(T)> predicate) override {
-        return sequence->Where(predicate);
-    }
-
-    Sequence<T>* Zip(Sequence<T>* other, std::function<T(T, T)> func) override {
-        return sequence->Zip(other, func);
-    }
-
-    Sequence<T>* Slice(int index, int count, Sequence<T>* replacement) override {
-        return sequence->Slice(index, count, replacement);
-    }
-
-    Sequence<T>* Split(std::function<bool(T)> predicate) override {
-        return sequence->Split(predicate);
+    Sequence<T>* Zip(const Sequence<T>& other) const override {
+        AdaptiveSequence<T>* result = new AdaptiveSequence<T>();
+        int minSize = min(this->GetSize(), other.GetSize());
+        for (int i = 0; i < minSize; ++i) {
+            result->Append(this->Get(i));
+            result->Append(other.Get(i));
+        }
+        return result;
     }
 
     bool TryGet(int index, T& value) override {
         return sequence->TryGet(index, value);
     }
 
-    bool TryFind(std::function<bool(T)> predicate, T& value) override {
+    bool TryFind(function<bool(T)> predicate, T& value) override {
         return sequence->TryFind(predicate, value);
     }
 
@@ -893,147 +824,235 @@ public:
 };
 
 template <class T>
-class SegmentedList : public ICollection<T> {
+class SegmentedList : public Sequence<T> {
 private:
     static const size_t SEGMENT_SIZE = 32;
+    LinkedList<DynamicArray<T>*> segments;
 
-    struct Segment {
-        T data[SEGMENT_SIZE];
-        size_t size = 0;
-        Segment* next = nullptr;
+    pair<DynamicArray<T>*, int> GetSegment(int index) const {
+        if (index < 0 || index >= GetSize()) throw IndexOutOfRange();
 
-        ~Segment() {
-            delete next;
+        int currentPos = 0;
+        for (int i = 0; i < segments.GetSize(); i++) {
+            DynamicArray<T>* segment = segments.Get(i);
+            if (index < currentPos + segment->GetSize()) {
+                return { segment, index - currentPos };
+            }
+            currentPos += segment->GetSize();
         }
-    };
+        throw IndexOutOfRange();
+    }
 
-    Segment* head = nullptr;
-    size_t totalSize = 0;
+    int GetSegmentIndex(int elementIndex) const {
+        int currentPos = 0;
+        for (int i = 0; i < segments.GetSize(); i++) {
+            currentPos += segments.Get(i)->GetSize();
+            if (elementIndex < currentPos) {
+                return i;
+            }
+        }
+        return segments.GetSize() - 1;
+    }
 
-    pair<Segment*, size_t> GetSegment(size_t index) {
-        if (index >= totalSize) {
-            throw IndexOutOfRange();
+    void SplitSegment(DynamicArray<T>* segment, int segmentIndex, int posInSegment) {
+        DynamicArray<T>* newSegment = new DynamicArray<T>();
+        int elementsToMove = segment->GetSize() - posInSegment;
+
+        for (int i = 0; i < elementsToMove; i++) {
+            newSegment->Append(segment->Get(posInSegment + i));
         }
-        Segment* current = head;
-        while (index >= SEGMENT_SIZE && current->next) {
-            index -= SEGMENT_SIZE;
-            current = current->next;
-        }
-        return { current, index };
+
+        segment->Resize(posInSegment);
+        segments.Insert(newSegment, segmentIndex + 1);
     }
 
 public:
+
+    SegmentedList() = default;
+
+    SegmentedList(T* items, int count) {
+        for (int i = 0; i < count; i += SEGMENT_SIZE) {
+            int segmentSize = std::min(static_cast<int>(SEGMENT_SIZE), count - i);
+            DynamicArray<T>* segment = new DynamicArray<T>(segmentSize);
+            for (int j = 0; j < segmentSize; j++) {
+                (*segment)[j] = items[i + j];
+            }
+            segments.Append(segment);
+        }
+    }
+
+    SegmentedList(const SegmentedList<T>& other) {
+        for (int i = 0; i < other.GetSize(); i++) {
+            this->Append(other.Get(i));
+        }
+    }
+
     ~SegmentedList() {
-        delete head;
+        for (int i = 0; i < segments.GetSize(); i++) {
+            delete segments.Get(i);
+        }
+    }
+
+    T GetFirst() override {
+        if (segments.GetSize() == 0) throw IndexOutOfRange();
+        DynamicArray<T>* firstSegment = segments.Get(0);
+        if (firstSegment->GetSize() == 0) throw IndexOutOfRange();
+        return (*firstSegment)[0];
+    }
+
+    T GetLast() override {
+        if (segments.GetSize() == 0) throw IndexOutOfRange();
+        DynamicArray<T>* lastSegment = segments.Get(segments.GetSize() - 1);
+        if (lastSegment->GetSize() == 0) throw IndexOutOfRange();
+        return (*lastSegment)[lastSegment->GetSize() - 1];
     }
 
     T Get(int index) const override {
-        pair<Segment*, size_t> segmentInfo = GetSegment(index);
-        return segmentInfo.first->data[segmentInfo.second];
+        auto segmentInfo = GetSegment(index);
+        return segmentInfo.first->Get(segmentInfo.second);
     }
 
     int GetSize() const override {
-        return totalSize;
+        int size = 0;
+        for (int i = 0; i < segments.GetSize(); i++) {
+            size += segments.Get(i)->GetSize();
+        }
+        return size;
     }
 
     void Append(T item) override {
-        if (!head) {
-            head = new Segment();
+        if (segments.GetSize() == 0 || segments.GetLast()->GetSize() >= SEGMENT_SIZE) {
+            segments.Append(new DynamicArray<T>());
         }
-
-        Segment* current = head;
-        while (current->next) {
-            current = current->next;
-        }
-
-        if (current->size == SEGMENT_SIZE) {
-            current->next = new Segment();
-            current = current->next;
-        }
-
-        current->data[current->size++] = item;
-        totalSize++;
+        segments.GetLast()->Append(item);
     }
 
     void Prepend(T item) override {
-        if (!head) {
-            head = new Segment();
+        if (segments.GetSize() == 0 || segments.GetFirst()->GetSize() >= SEGMENT_SIZE) {
+            segments.Prepend(new DynamicArray<T>());
         }
-        if (head->size == SEGMENT_SIZE) {
-            Segment* newSegment = new Segment();
-            newSegment->next = head;
-            head = newSegment;
-        }
-        for (size_t i = head->size; i > 0; --i) {
-            head->data[i] = head->data[i - 1];
-        }
-        head->data[0] = item;
-        head->size++;
-        totalSize++;
+        segments.GetFirst()->Prepend(item);
     }
 
     void Insert(T item, int index) override {
+        if (index < 0 || index > GetSize()) {
+            throw IndexOutOfRange();
+        }
+
         if (index == 0) {
             Prepend(item);
             return;
         }
-        if (index == totalSize) {
+        if (index == GetSize()) {
             Append(item);
             return;
         }
-        pair<Segment*, size_t> segmentInfo = GetSegment(index);
-        Segment* segment = segmentInfo.first;
-        size_t offset = segmentInfo.second;
-        if (segment->size == SEGMENT_SIZE) {
-            Segment* newSegment = new Segment();
-            size_t moveCount = SEGMENT_SIZE / 2;
-            size_t startIndex = SEGMENT_SIZE - moveCount;
-            for (size_t i = 0; i < moveCount; ++i) {
-                newSegment->data[i] = segment->data[startIndex + i];
+
+        auto segmentInfo = GetSegment(index);
+        DynamicArray<T>* segment = segmentInfo.first;
+        int posInSegment = segmentInfo.second;
+
+        if (segment->GetSize() < SEGMENT_SIZE) {
+            segment->Insert(item, posInSegment);
+            return;
+        }
+
+        DynamicArray<T>* newSegment = new DynamicArray<T>();
+        int splitPos = SEGMENT_SIZE / 2;
+
+        for (int i = splitPos; i < segment->GetSize(); ++i) {
+            newSegment->Append(segment->Get(i));
+        }
+
+        segment->Resize(splitPos);
+        int segmentIndex = GetSegmentIndex(index);
+        segments.Insert(newSegment, segmentIndex + 1);
+
+        if (posInSegment >= splitPos) {
+            newSegment->Insert(item, posInSegment - splitPos);
+        }
+        else {
+            segment->Insert(item, posInSegment);
+        }
+    }
+
+    Sequence<T>* GetSubSequence(int startIndex, int endIndex) override {
+        SegmentedList<T>* subList = new SegmentedList<T>();
+        for (int i = startIndex; i <= endIndex; i++) {
+            subList->Append(this->Get(i));
+        }
+        return subList;
+    }
+
+    Sequence<T>* Concat(Sequence<T>* other) override {
+        SegmentedList<T>* result = new SegmentedList<T>(*this);
+        for (int i = 0; i < other->GetSize(); i++) {
+            result->Append(other->Get(i));
+        }
+        return result;
+    }
+
+    Sequence<T>* Map(function<T(T)> func) override {
+        SegmentedList<T>* result = new SegmentedList<T>();
+        for (int i = 0; i < GetSize(); i++) {
+            result->Append(func(this->Get(i)));
+        }
+        return result;
+    }
+
+    Sequence<T>* From(const Sequence<T>& other) {
+        Sequence<T>* result = new SegmentedList<T>();
+        for (int i = 0; i < other.GetSize(); ++i) {
+            result->Append(other.Get(i));
+        }
+        return result;
+    }
+
+    Sequence<T>* Zip(const Sequence<T>& other) const override {
+        SegmentedList<T>* result = new SegmentedList<T>();
+        int minSize = min(this->GetSize(), other.GetSize());
+        for (int i = 0; i < minSize; ++i) {
+            result->Append(this->Get(i));
+            result->Append(other.Get(i));
+        }
+        return result;
+    }
+
+    bool TryGet(int index, T& value) override {
+        if (index < 0 || index >= GetSize()) {
+            return false;
+        }
+        value = Get(index);
+        return true;
+    }
+
+    bool TryFind(std::function<bool(T)> predicate, T& value) override {
+        for (int i = 0; i < GetSize(); i++) {
+            T item = Get(i);
+            if (predicate(item)) {
+                value = item;
+                return true;
             }
-            newSegment->size = moveCount;
-            segment->size -= moveCount;
-            newSegment->next = segment->next;
-            segment->next = newSegment;
-            if (offset >= segment->size) {
-                offset -= segment->size;
-                segment = newSegment;
-            }
         }
-        for (size_t i = segment->size; i > offset; --i) {
-            segment->data[i] = segment->data[i - 1];
-        }
-        segment->data[offset] = item;
-        segment->size++;
-        totalSize++;
-    }
-};
-
-template <class T>
-class Option {
-private:
-    T value;
-    bool hasValue;
-public:
-    Option() : hasValue(false) {}
-    Option(T val) : value(val), hasValue(true) {}
-    static Option<T> None() {
-        return Option<T>();
+        return false;
     }
 
-    bool IsSome() {
-        return hasValue;
+    T& operator[](int index) override {
+        auto segmentInfo = GetSegment(index);
+        return (*segmentInfo.first)[segmentInfo.second];
     }
 
-    bool IsNone() {
-        return !hasValue;
+    const T& operator[](int index) const override {
+        auto segmentInfo = GetSegment(index);
+        return (*segmentInfo.first)[segmentInfo.second];
     }
 
-    T GetValue() {
-        if (!hasValue) {
-            throw runtime_error("Option is None");
-        }
-        return value;
+    Sequence<T>* Instance() override {
+        return this;
+    }
+
+    Sequence<T>* Clone() const override {
+        return new SegmentedList<T>(*this);
     }
 };
 
