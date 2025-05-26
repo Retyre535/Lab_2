@@ -496,12 +496,14 @@
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="taskbarbutton.cpp" />
+    <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="sample.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Deque.h" />
+    <ClInclude Include="SegmentedBufferDeque.h" />
     <ClInclude Include="Sequences.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
