@@ -11,7 +11,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="taskbarbutton.cpp">
+    <ClCompile Include="ui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -22,6 +22,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sequences.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Deque.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SegmentedBufferDeque.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
